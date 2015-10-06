@@ -8,15 +8,11 @@ sub get {
     shift->handle(sub {
         my ($c, $dbh) = @_;
         my $entity = $c->param('entity');
-        my $value_types = $dbh->selectall_arrayref('
-            select enumlabel from pg_enum e
-            inner join pg_type k
-            on k.oid = e.enumtypid
-            where k.typname = ?
-            ', {}, 'field_value_kind');
-        my @types = map { $_->[0] } @$value_types;
+        my $value_kind_query = 'select enumlabel from pg_enum e inner join pg_type k on k.oid = e.enumtypid where k.typname = ?';
+        my $value_kinds = $dbh->selectall_arrayref($value_kind_query, {}, 'field_value_kind');
+        my @kinds = map { $_->[0] } @$value_kinds;
         my $query = "select * from current_attribute_with_fields a";
-        $query .= join "", map { " left join ${_}_attribute $_ on $_.attribute = a.id" } @types;
+        $query .= join "", map { " left join ${_}_attribute $_ on $_.attribute = a.id" } @kinds;
         $query .= " where entity = ?";
         my $rows = $dbh->selectall_arrayref($query, { Slice => {} }, $entity);
 

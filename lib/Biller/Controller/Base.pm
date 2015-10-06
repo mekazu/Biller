@@ -2,14 +2,21 @@ package Biller::Controller::Base;
 use Mojo::Base 'Mojolicious::Controller';
 use DBI;
 
-my $_dbh;
 sub dbh {
-    return $_dbh ||= DBI->connect("dbi:Pg:dbname=biller", '', '', {RaiseError => 1, PrintError => 0, AutoCommit => 0});
+    my ($class, $dbh_to_set) = @_;
+    our ($dbh, $dbh_callback);
+    if (@_ > 1) {
+        $dbh = $dbh_to_set;
+        return unless defined $dbh;
+    }
+    my $attr = { RaiseError => 1, PrintError => 0, AutoCommit => 0 };
+    $dbh_callback ||= sub { DBI->connect("dbi:Pg:dbname=biller", '', '', $attr ) };
+    return $dbh ||= $dbh_callback->();
 }
 
 sub handle {
     my ($self, $sub) = @_;
-    my $dbh = dbh();
+    my $dbh = $self->dbh;
     my $result;
     my $status = 200;
     eval {
@@ -20,13 +27,13 @@ sub handle {
         my $error = $@;
         $dbh->rollback;
         $dbh->disconnect;
-        $_dbh = undef;
+        $self->dbh(undef);
         warn $error;
         $status = 500;
         $result = { error => $error };
     };
     $dbh->disconnect;
-    $_dbh = undef;
+    $self->dbh(undef);
     my %response = (status => $status);
     if (defined $result) {
         $response{json} = $result;
