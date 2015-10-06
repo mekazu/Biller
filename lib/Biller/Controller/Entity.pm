@@ -1,13 +1,11 @@
-#!/usr/bin/env perl
-use Mojolicious::Lite;
-use DBI;
+package Biller::Controller::Entity;
+use Mojo::Base 'Biller::Controller::Base';
+
 use Data::Dump qw(dump);
 
-# Documentation browser under "/perldoc"
-plugin 'PODRenderer';
-
-get '/entity/:entity' => sub {
-    handle(shift, sub {
+# This action will render a template
+sub get {
+    shift->handle(sub {
         my ($c, $dbh) = @_;
         my $entity = $c->param('entity');
         my $value_types = $dbh->selectall_arrayref('
@@ -42,10 +40,10 @@ get '/entity/:entity' => sub {
         }
         return $filtered_rows;
     });
-};
+}
 
-post '/entity' => sub {
-    handle (shift, sub {
+sub post {
+    shift->handle(sub {
         my ($c, $dbh) = @_;
         my $entity_kind = $c->param('kind');
         my $insert_entity = 'insert into entity (kind) values (?) returning id';
@@ -53,13 +51,26 @@ post '/entity' => sub {
         my $params = $c->req->params->to_hash;
         warn "Inserting attributes: @{[dump $params]}";
         while (my ($key, $value) = (each %$params)) {
-            insert_attribute($dbh, $entity_id, $key, $value);
+            _insert_attribute($dbh, $entity_id, $key, $value);
         }
         return { entity => $entity_id };
     });
-};
+}
 
-sub insert_attribute {
+sub patch {
+    shift->handle(sub {
+        my ($c, $dbh) = @_;
+        my $entity_id = $c->param('entity');
+        my $params = $c->req->params->to_hash;
+        my $inserted_attribute_ids = [];
+        while (my ($key, $value) = (each %$params)) {
+            push @$inserted_attribute_ids, _insert_attribute($dbh, $entity_id, $key, $value);
+        }
+        return $inserted_attribute_ids;
+    });
+}
+
+sub _insert_attribute {
     my ($dbh, $entity, $key, $value) = @_;
     my $select_field = 'select id, kind from field where key = ?';
     my ($field_id, $field_kind) = $dbh->selectrow_array($select_field, {}, $key);
@@ -79,52 +90,4 @@ sub insert_attribute {
     return;
 }
 
-patch '/entity/:entity' => sub {
-    handle(shift, sub {
-        my ($c, $dbh) = @_;
-        my $entity_id = $c->param('entity');
-        my $params = $c->req->params->to_hash;
-        my $inserted_attribute_ids = [];
-        while (my ($key, $value) = (each %$params)) {
-            push @$inserted_attribute_ids, insert_attribute($dbh, $entity_id, $key, $value);
-        }
-        return $inserted_attribute_ids;
-    });
-};
-
-my $_dbh;
-sub dbh {
-    return $_dbh ||= DBI->connect("dbi:Pg:dbname=biller", '', '', {RaiseError => 1, PrintError => 0, AutoCommit => 0});
-}
-
-sub handle {
-    my ($c, $sub) = @_;
-    my $dbh = dbh();
-    my $result;
-    my $status = 200;
-    eval {
-        $result = $sub->($c, $dbh);
-        $dbh->commit;
-        1;
-    } or do {
-        my $error = $@;
-        $dbh->rollback;
-        $dbh->disconnect;
-        $_dbh = undef;
-        warn $error;
-        $status = 500;
-        $result = { error => $error };
-    };
-    $dbh->disconnect;
-    $_dbh = undef;
-    my %response = (status => $status);
-    if ($result) {
-        $response{json} = $result;
-    } else {
-        $response{text} = q{};
-    }
-    $c->render(%response);
-    return;
-}
-
-app->start;
+1;
