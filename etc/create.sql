@@ -5,11 +5,6 @@ create type field_value_kind as enum (
     'boolean'
 );
 
-create type entity_kind as enum (
-    'foo',
-    'bar'
-);
-
 create table field (
     id serial primary key,
     key text not null,
@@ -18,8 +13,7 @@ create table field (
 );
 
 create table entity (
-    id bigserial primary key,
-    kind entity_kind not null
+    id bigserial primary key
 );
 
 create table attribute (
@@ -27,6 +21,14 @@ create table attribute (
     entity bigint not null references entity (id),
     field int not null references field (id),
     time_set timestamp with time zone not null default now()
+);
+
+-- Allows timestamps of attributes to be retrospectively adjusted
+create table attribute_time_override (
+    id bigserial primary key,
+    attribute bigint not null references attribute (id),
+    time_set timestamp with time zone not null default now(),
+    time_effective timestamp with time zone not null
 );
 
 create table int_attribute (
@@ -50,3 +52,6 @@ select max(id) as id, entity, field from attribute group by entity, field;
 
 create view current_attribute_with_fields as
 select ca.id, entity, field, key, label, kind from current_attribute ca inner join field f on f.id = ca.field;
+
+create view current_int_attribute_with_fields as
+select * from current_attribute_with_fields a inner join int_attribute int on int.attribute = a.id;

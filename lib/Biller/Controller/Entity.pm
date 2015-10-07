@@ -3,7 +3,6 @@ use Mojo::Base 'Biller::Controller::Base';
 
 use Data::Dump qw(dump);
 
-# This action will render a template
 sub get {
     shift->handle(sub {
         my ($c, $dbh) = @_;
@@ -38,14 +37,77 @@ sub get {
     });
 }
 
+sub get_children {
+    shift->handle(sub {
+        my ($c, $dbh) = @_;
+        my $entity = $c->param('entity');
+        my $query = 'select * from current_attribute_with_fields a';
+        $query .= ' inner join int_attribute int on int.attribute = a.id';
+        $query .= ' where a.key = ? and int.int_value = ?';
+        my $rows = $dbh->selectall_arrayref($query, { Slice => {} }, 'parent', $entity);
+        my $children = [ map { $_->{entity} } @$rows ];
+        return $children;
+    })
+}
+
+sub get_related {
+    shift->handle(sub {
+        my ($c, $dbh) = @_;
+        my $entity = $c->param('entity');
+
+        # Most of this banal complexity is due to the absurdly restrictive
+        # model provided by the database schema. It would probably make more
+        # sense just to create dedicated tables for storing relationships
+        # between entities but this at least demonstrates that it can be done.
+        my $query = <<EOSQL;
+select ev.text_value as grouping, d.int_value as related
+
+-- Link attribute(s) related to our entity.
+from current_int_attribute_with_fields a
+
+-- Find the parent attribute(s) of the same Link entity or entities.
+-- The parent attributes point to the Grouping entity.
+inner join current_int_attribute_with_fields b
+on a.entity = b.entity
+and b.key = 'parent'
+
+-- Find all other entities linked to the Grouping entity with the same parent attribute.
+inner join current_int_attribute_with_fields c
+on b.int_value = c.int_value
+and c.key = 'parent'
+-- and c.entity != a.entity -- commented out to include the current entity.
+
+-- For each of these Link entities find related entities via their 'related' attribute.
+-- d.int_value will be the related entity id.
+inner join current_int_attribute_with_fields d
+on c.entity = d.entity
+and d.key = 'related'
+
+-- Finally, grab the 'type' attribute of the Grouping entity.
+inner join current_attribute_with_fields e
+on e.entity = b.int_value
+and e.key = 'type'
+inner join text_attribute ev
+on e.id = ev.attribute
+
+-- Find all 'link' entities related to our entity.
+where a.key = 'related'
+and a.int_value = ?
+EOSQL
+        my $rows = $dbh->selectall_arrayref($query, { Slice => {} }, $entity);
+        my $related;
+        push @{$related->{ $_->{grouping}}}, $_->{related} foreach (@$rows);
+        return $related;
+    });
+}
+
 sub post {
     shift->handle(sub {
         my ($c, $dbh) = @_;
         my $entity_kind = $c->param('kind');
-        my $insert_entity = 'insert into entity (kind) values (?) returning id';
-        my ($entity_id) = $dbh->selectrow_array($insert_entity, {}, $entity_kind);
+        my $insert_entity = 'insert into entity values (default) returning id';
+        my ($entity_id) = $dbh->selectrow_array($insert_entity);
         my $params = $c->req->params->to_hash;
-        warn "Inserting attributes: @{[dump $params]}";
         while (my ($key, $value) = (each %$params)) {
             _insert_attribute($dbh, $entity_id, $key, $value);
         }
@@ -80,7 +142,6 @@ sub _insert_attribute {
         my ($attribute_id) = $dbh->selectrow_array($insert_attribute_statement, {}, $entity, $field_id);
         $value = undef if $value eq q{};
         $dbh->do($insert_attribute_kind_statement, {}, $attribute_id, $value);
-        warn "Inserted attribute: $attribute_id";
         return $attribute_id;
     }
     return;

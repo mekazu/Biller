@@ -13,6 +13,8 @@ sub startup {
 
   # Normal route to controller
   $r->get('/entity/:entity')->to('entity#get');
+  $r->get('/entity/:entity/children')->to('entity#get_children');
+  $r->get('/entity/:entity/related')->to('entity#get_related');
   $r->post('/entity')->to('entity#post');
   $r->patch('/entity/:entity')->to('entity#patch');
 }
