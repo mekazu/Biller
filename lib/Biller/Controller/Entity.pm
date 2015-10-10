@@ -7,6 +7,25 @@ sub get {
     shift->handle(sub {
         my ($c, $dbh) = @_;
         my $entity = $c->param('entity');
+        my $before = $c->param('before');
+        if ($before) {
+            my $recreate_view = 'create or replace temp view current_attribute as'
+                . ' select max(id) as id, entity, field'
+                . ' from attribute'
+                . ' where time_set < ?'
+                . ' group by entity, field';
+            $dbh->do($recreate_view, {}, $before);
+            my $referenced_views = [
+                'create or replace temp view current_attribute_with_fields as'
+                . ' select ca.id, entity, field, key, label, kind'
+                . ' from current_attribute ca'
+                . ' inner join field f on f.id = ca.field',
+                'create or replace temp view current_int_attribute_with_fields as'
+                . ' select * from current_attribute_with_fields a '
+                . ' inner join int_attribute int on int.attribute = a.id'
+            ];
+            $dbh->do($_, {}) foreach (@$referenced_views);
+        }
         my $value_kind_query = 'select enumlabel from pg_enum e inner join pg_type k on k.oid = e.enumtypid where k.typname = ?';
         my $value_kinds = $dbh->selectall_arrayref($value_kind_query, {}, 'field_value_kind');
         my @kinds = map { $_->[0] } @$value_kinds;
