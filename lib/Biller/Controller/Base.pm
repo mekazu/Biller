@@ -31,6 +31,8 @@ sub handle {
         eval { $dbh->disconnect; 1; } or do { warn "Error trying to disconnect: $@"; };
         $self->dbh(undef);
         warn $error;
+        # Keep just the error message.
+        $error =~ s/\s+at\s+.*\s+line\s+\d+.*//;
         $status = 500;
         $result = { error => $error };
     };

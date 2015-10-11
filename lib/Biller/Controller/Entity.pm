@@ -27,9 +27,7 @@ sub get {
             ];
             $dbh->do($_, {}) foreach (@$referenced_views);
         }
-        my $value_kind_query = 'select enumlabel from pg_enum e inner join pg_type k on k.oid = e.enumtypid where k.typname = ?';
-        my $value_kinds = $dbh->selectall_arrayref($value_kind_query, {}, 'field_value_kind');
-        my @kinds = map { $_->[0] } @$value_kinds;
+        my @kinds = $c->_list_value_kinds($dbh);
         my $query = "select * from current_attribute_with_fields a";
         $query .= join "", map { " left join ${_}_attribute $_ on $_.attribute = a.id" } @kinds;
         $query .= " where entity = ?";
@@ -37,6 +35,15 @@ sub get {
         # Unpack the results, filtering out the unneeded values.
         return [ grep {not $c->_filter_attribute_results($_)} @$rows];
     });
+}
+
+sub _list_value_kinds {
+    my ($self, $dbh) = @_;
+    my $value_kind_query = 'select enumlabel from pg_enum e'
+        . ' inner join pg_type k on k.oid = e.enumtypid'
+        . ' where k.typname = ?';
+    my $value_kinds = $dbh->selectall_arrayref($value_kind_query, {}, 'field_value_kind');
+    return map { $_->[0] } @$value_kinds;
 }
 
 # Modifies the key of "${kind}_value" to be just 'value' and strips out other non-matching values.
@@ -129,18 +136,23 @@ sub get_attribute {
         my $entity_id = $c->param('entity');
         my $key = $c->param('key');
         my $kind = $c->param('kind');
+        if ($kind) {
+            my @kinds = $c->_list_value_kinds($dbh);
+            die "Not a valid kind: $kind" unless grep { $kind eq $_ } @kinds;
+        }
 
         # Determine the kind of the field if it wasn't passed in.
         # selectrow_array in scalar context returns the only field selected.
         $kind ||= $dbh->selectrow_array('select kind from field where key = ?', {}, $key);
-        confess "Couldn't determine kind for key: $key" unless $kind;
+        die "Couldn't determine kind for key: $key" unless $kind;
         my $query = "select * "
         . " from current_attribute_with_fields a"
         . " inner join ${kind}_attribute $kind on $kind.attribute = a.id"
         . " where key = ?"
         . " and entity = ?";
         my $row = $dbh->selectrow_hashref($query, { Slice => {} }, $key, $entity_id);
-        return $row unless $c->_filter_attribute_results($row);
+        die "No such attribute" if $c->_filter_attribute_results($row);
+        return $row;
     });
 }
 
