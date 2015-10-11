@@ -12,7 +12,9 @@ sub startup {
   my $r = $self->routes;
 
   # Normal route to controller
-  $r->get('/entity/timestamp')->to('entity#get_timestamp');
+  $r->get('/field')->to('field#get_all');
+  $r->get('/field/:field')->to('field#get');
+  $r->post('/field/:field')->to('field#post');
   $r->get('/entity/:entity')->to('entity#get');
   $r->get('/entity/:entity/children')->to('entity#get_children');
   $r->get('/entity/:entity/related')->to('entity#get_related');
