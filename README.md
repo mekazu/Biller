@@ -8,3 +8,4 @@ Proof of concept billing system.
 * Search for child and related entities.
 * Search with 'before' param to go back in time.
 * Lookup specific attributes of an entity.
+* Create and lookup new fields.
