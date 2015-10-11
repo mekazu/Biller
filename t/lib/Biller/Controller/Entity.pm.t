@@ -3,6 +3,8 @@ use Test::More;
 use Test::Differences;
 use Biller::Controller::Base;
 
+use_ok 'Biller::Controller::Entity';
+
 my $dbh = DBI->connect("DBI:Mock:", '', '', {RaiseError => 1, PrintError => 0, AutoCommit => 0 } );
 local $Biller::Controller::Base::dbh_callback = sub { $dbh };
 

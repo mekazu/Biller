@@ -2,6 +2,7 @@ package Biller::Controller::Entity;
 use Mojo::Base 'Biller::Controller::Base';
 
 use Data::Dump qw(dump);
+use Carp qw(confess);
 
 sub get {
     shift->handle(sub {
@@ -33,27 +34,29 @@ sub get {
         $query .= join "", map { " left join ${_}_attribute $_ on $_.attribute = a.id" } @kinds;
         $query .= " where entity = ?";
         my $rows = $dbh->selectall_arrayref($query, { Slice => {} }, $entity);
-
         # Unpack the results, filtering out the unneeded values.
-        my $filtered_rows = [];
-        foreach my $row (@$rows) {
-            my $filter_row;
-            foreach my $key (keys %$row) {
-                if ($key =~ m/_value$/) {
-                    if ($key eq "$row->{kind}_value") {
-                        my $value = $row->{$key};
-                        $row->{value} = $value;
-                        $filter_row = 1 unless defined $value;
-                    }
-                    delete $row->{$key};
-                } elsif ($key =~ m/^id|attribute|field$/) {
-                    delete $row->{$key};
-                }
-            }
-            push @$filtered_rows, $row unless $filter_row;
-        }
-        return $filtered_rows;
+        return [ grep {not $c->_filter_attribute_results($_)} @$rows];
     });
+}
+
+# Modifies the key of "${kind}_value" to be just 'value' and strips out other non-matching values.
+# Returns a flag to indicate whether the value is null and therefore deleted.
+sub _filter_attribute_results {
+    my ($self, $row) = @_;
+    my $filter_row;
+    foreach my $key (keys %$row) {
+        if ($key =~ m/_value$/) {
+            if ($key eq "$row->{kind}_value") {
+                my $value = $row->{$key};
+                $row->{value} = $value;
+                $filter_row = 1 unless defined $value;
+            }
+            delete $row->{$key};
+        } elsif ($key =~ m/^id|attribute|field$/) {
+            delete $row->{$key};
+        }
+    }
+    return $filter_row;
 }
 
 sub get_children {
@@ -120,10 +123,30 @@ EOSQL
     });
 }
 
+sub get_attribute {
+    shift->handle(sub {
+        my ($c, $dbh) = @_;
+        my $entity_id = $c->param('entity');
+        my $key = $c->param('key');
+        my $kind = $c->param('kind');
+
+        # Determine the kind of the field if it wasn't passed in.
+        # selectrow_array in scalar context returns the only field selected.
+        $kind ||= $dbh->selectrow_array('select kind from field where key = ?', {}, $key);
+        confess "Couldn't determine kind for key: $key" unless $kind;
+        my $query = "select * "
+        . " from current_attribute_with_fields a"
+        . " inner join ${kind}_attribute $kind on $kind.attribute = a.id"
+        . " where key = ?"
+        . " and entity = ?";
+        my $row = $dbh->selectrow_hashref($query, { Slice => {} }, $key, $entity_id);
+        return $row unless $c->_filter_attribute_results($row);
+    });
+}
+
 sub post {
     shift->handle(sub {
         my ($c, $dbh) = @_;
-        my $entity_kind = $c->param('kind');
         my $insert_entity = 'insert into entity values (default) returning id';
         my ($entity_id) = $dbh->selectrow_array($insert_entity);
         my $params = $c->req->params->to_hash;

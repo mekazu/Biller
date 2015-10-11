@@ -22,18 +22,18 @@ sub handle {
     eval {
         $result = $sub->($self, $dbh);
         $dbh->commit;
+        $dbh->disconnect;
+        $self->dbh(undef);
         1;
     } or do {
         my $error = $@;
-        $dbh->rollback;
-        $dbh->disconnect;
+        eval { $dbh->rollback; 1; } or do { warn "Error trying to rollback: $@"; };
+        eval { $dbh->disconnect; 1; } or do { warn "Error trying to disconnect: $@"; };
         $self->dbh(undef);
         warn $error;
         $status = 500;
         $result = { error => $error };
     };
-    $dbh->disconnect;
-    $self->dbh(undef);
     my %response = (status => $status);
     if (defined $result) {
         $response{json} = $result;

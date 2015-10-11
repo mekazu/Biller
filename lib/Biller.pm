@@ -15,6 +15,8 @@ sub startup {
   $r->get('/entity/:entity')->to('entity#get');
   $r->get('/entity/:entity/children')->to('entity#get_children');
   $r->get('/entity/:entity/related')->to('entity#get_related');
+  $r->get('/entity/:entity/attribute/:key')->to('entity#get_attribute');
+  $r->get('/entity/:entity/attribute/:key/kind/:kind')->to('entity#get_attribute');
   $r->post('/entity')->to('entity#post');
   $r->patch('/entity/:entity')->to('entity#patch');
 }

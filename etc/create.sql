@@ -7,7 +7,7 @@ create type field_value_kind as enum (
 
 create table field (
     id serial primary key,
-    key text not null,
+    key text not null unique,
     label text not null,
     kind field_value_kind not null
 );

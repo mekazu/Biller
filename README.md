@@ -7,3 +7,4 @@ Proof of concept billing system.
 * Store attributes of a given entity based on defined fields.
 * Search for child and related entities.
 * Search with 'before' param to go back in time.
+* Lookup specific attributes of an entity.
