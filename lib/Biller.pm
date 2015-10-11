@@ -12,6 +12,7 @@ sub startup {
   my $r = $self->routes;
 
   # Normal route to controller
+  $r->get('/entity/timestamp')->to('entity#get_timestamp');
   $r->get('/entity/:entity')->to('entity#get');
   $r->get('/entity/:entity/children')->to('entity#get_children');
   $r->get('/entity/:entity/related')->to('entity#get_related');

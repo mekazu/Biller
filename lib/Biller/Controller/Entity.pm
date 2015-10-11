@@ -4,29 +4,12 @@ use Mojo::Base 'Biller::Controller::Base';
 use Data::Dump qw(dump);
 use Carp qw(confess);
 
+
 sub get {
     shift->handle(sub {
         my ($c, $dbh) = @_;
+        $c->_get_time_machine($dbh);
         my $entity = $c->param('entity');
-        my $before = $c->param('before');
-        if ($before) {
-            my $recreate_view = 'create or replace temp view current_attribute as'
-                . ' select max(id) as id, entity, field'
-                . ' from attribute'
-                . ' where time_set < ?'
-                . ' group by entity, field';
-            $dbh->do($recreate_view, {}, $before);
-            my $referenced_views = [
-                'create or replace temp view current_attribute_with_fields as'
-                . ' select ca.id, entity, field, key, label, kind'
-                . ' from current_attribute ca'
-                . ' inner join field f on f.id = ca.field',
-                'create or replace temp view current_int_attribute_with_fields as'
-                . ' select * from current_attribute_with_fields a '
-                . ' inner join int_attribute int on int.attribute = a.id'
-            ];
-            $dbh->do($_, {}) foreach (@$referenced_views);
-        }
         my @kinds = $c->_list_value_kinds($dbh);
         my $query = "select * from current_attribute_with_fields a";
         $query .= join "", map { " left join ${_}_attribute $_ on $_.attribute = a.id" } @kinds;
@@ -69,6 +52,7 @@ sub _filter_attribute_results {
 sub get_children {
     shift->handle(sub {
         my ($c, $dbh) = @_;
+        $c->_enter_time_machine($dbh);
         my $entity = $c->param('entity');
         my $query = 'select * from current_attribute_with_fields a';
         $query .= ' inner join int_attribute int on int.attribute = a.id';
@@ -82,6 +66,7 @@ sub get_children {
 sub get_related {
     shift->handle(sub {
         my ($c, $dbh) = @_;
+        $c->_enter_time_machine($dbh);
         my $entity = $c->param('entity');
 
         # Most of this banal complexity is due to the absurdly restrictive
@@ -133,6 +118,7 @@ EOSQL
 sub get_attribute {
     shift->handle(sub {
         my ($c, $dbh) = @_;
+        $c->_enter_time_machine($dbh);
         my $entity_id = $c->param('entity');
         my $key = $c->param('key');
         my $kind = $c->param('kind');
@@ -180,6 +166,34 @@ sub patch {
         }
         return $inserted_attribute_ids;
     });
+}
+
+sub _enter_time_machine {
+    my ($c, $dbh) = @_;
+    my $before = $c->param('before');
+    if ($before) {
+
+        # Recreate the current_attributes view to go back in time.
+        my $recreate_view = 'create or replace temp view current_attribute as'
+            . ' select max(id) as id, entity, field'
+            . ' from attribute'
+            . ' where time_set < ?'
+            . ' group by entity, field';
+        $dbh->do($recreate_view, {}, $before);
+
+        # Need to recreate all views which reference current_attribute otherwise
+        # they'll refer to the original.
+        my $referenced_views = [
+            'create or replace temp view current_attribute_with_fields as'
+            . ' select ca.id, entity, field, key, label, kind'
+            . ' from current_attribute ca'
+            . ' inner join field f on f.id = ca.field',
+            'create or replace temp view current_int_attribute_with_fields as'
+            . ' select * from current_attribute_with_fields a '
+            . ' inner join int_attribute int on int.attribute = a.id',
+        ];
+        $dbh->do($_, {}) foreach (@$referenced_views);
+    }
 }
 
 sub _insert_attribute {
