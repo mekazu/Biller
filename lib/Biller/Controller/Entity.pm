@@ -8,7 +8,7 @@ use Carp qw(confess);
 sub get {
     shift->handle(sub {
         my ($c, $dbh) = @_;
-        $c->_get_time_machine($dbh);
+        $c->_enter_time_machine($dbh);
         my $entity = $c->param('entity');
         my @kinds = $c->_list_value_kinds($dbh);
         my $query = "select * from current_attribute_with_fields a";

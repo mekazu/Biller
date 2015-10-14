@@ -12,6 +12,7 @@ sub startup {
   my $r = $self->routes;
 
   # Normal route to controller
+  $r->get('/entity/:entity/transactions')->to('accounting#get_transactions');
   $r->get('/field')->to('field#get_all');
   $r->get('/field/:field')->to('field#get');
   $r->post('/field/:field')->to('field#post');

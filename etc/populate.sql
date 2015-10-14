@@ -2,6 +2,7 @@ insert into field (key, label, kind) values ('status', 'Status', 'boolean');
 insert into field (key, label, kind) values ('type', 'Type', 'text');
 insert into field (key, label, kind) values ('parent', 'Parent', 'int');
 insert into field (key, label, kind) values ('related', 'Related', 'int'); -- Related entity - used by Link entities
+insert into field (key, label, kind) values ('amount', 'Amount in cents, debits are negative', 'int');
 
 -- Entity 1 - Client
 insert into entity values (default);

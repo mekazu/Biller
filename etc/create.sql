@@ -55,3 +55,6 @@ select ca.id, entity, field, key, label, kind from current_attribute ca inner jo
 
 create view current_int_attribute_with_fields as
 select * from current_attribute_with_fields a inner join int_attribute int on int.attribute = a.id;
+
+create view current_text_attribute_with_fields as
+select * from current_attribute_with_fields a inner join text_attribute text on text.attribute = a.id;
